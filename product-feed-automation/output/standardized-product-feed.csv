@@ -1,0 +1,8 @@
+﻿sku,product_name,category,price_uah,stock_qty,availability,status,barcode
+PF-001,Тент універсальний 3x5 м,tents,1299.90,24,in_stock,active,4820000000011
+PF-002,Плівка армована 4x5 м,films,899.50,18,in_stock,active,4820000000028
+PF-003,Стрічка пакувальна 48 мм,packaging,79.90,150,in_stock,active,4820000000035
+PF-004,Герметик універсальний 310 мл,sealants,189.00,8,out_of_stock,inactive,4820000000042
+PF-005,Набір викруток 6 шт,tools,459.00,0,out_of_stock,out_of_stock,4820000000059
+PF-006,Плівка захисна 4x12 м,films,349.90,12,in_stock,active,4820000000066
+PF-018,Стрічка малярна 48 мм,packaging,94.75,45,in_stock,active,4820000000202
