@@ -4,7 +4,11 @@ from collections import defaultdict
 
 FILE_PATH = "examples/demo-komertsiini-dani.csv"
 OUTPUT_DIR = "output"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "commercial-report.csv")
+
+CATEGORY_REPORT = os.path.join(OUTPUT_DIR, "commercial-report.csv")
+PRODUCT_REPORT = os.path.join(OUTPUT_DIR, "products-report.csv")
+SUPPLIER_REPORT = os.path.join(OUTPUT_DIR, "suppliers-report.csv")
+CUSTOMER_REPORT = os.path.join(OUTPUT_DIR, "customers-report.csv")
 
 
 def load_data(file_path):
@@ -27,76 +31,88 @@ def load_data(file_path):
     return rows
 
 
-def calculate_summary(rows):
-    total_revenue = sum(row["виручка"] for row in rows)
-    total_cost = sum(row["собівартість"] for row in rows)
-    total_profit = sum(row["валовий_прибуток"] for row in rows)
-
-    margin = (total_profit / total_revenue * 100) if total_revenue else 0
-
-    return total_revenue, total_cost, total_profit, margin
-
-
-def analyze_categories(rows):
-    categories = defaultdict(
+def aggregate(rows, key):
+    result = defaultdict(
         lambda: {
+            "кількість": 0,
             "виручка": 0,
             "собівартість": 0,
             "прибуток": 0,
-            "кількість": 0,
+            "операції": 0,
         }
     )
 
     for row in rows:
-        category = row["категорія"]
+        name = row[key]
 
-        categories[category]["виручка"] += row["виручка"]
-        categories[category]["собівартість"] += row["собівартість"]
-        categories[category]["прибуток"] += row["валовий_прибуток"]
-        categories[category]["кількість"] += row["кількість"]
+        result[name]["кількість"] += row["кількість"]
+        result[name]["виручка"] += row["виручка"]
+        result[name]["собівартість"] += row["собівартість"]
+        result[name]["прибуток"] += row["валовий_прибуток"]
+        result[name]["операції"] += 1
 
-    return categories
+    return result
 
 
-def export_category_report(categories, output_file):
+def calculate_margin(profit, revenue):
+    return (profit / revenue * 100) if revenue else 0
+
+
+def calculate_markup(profit, cost):
+    return (profit / cost * 100) if cost else 0
+
+
+def export_report(data, name_column, output_file):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    with open(output_file, "w", encoding="utf-8-sig", newline="") as file:
-        writer = csv.writer(file)
+    rows_to_export = []
 
-        writer.writerow(
-            [
-                "категорія",
-                "кількість",
-                "виручка",
-                "собівартість",
-                "валовий_прибуток",
-                "маржа_%",
-            ]
+    for name, values in data.items():
+        margin = calculate_margin(values["прибуток"], values["виручка"])
+        markup = calculate_markup(values["прибуток"], values["собівартість"])
+
+        rows_to_export.append(
+            {
+                name_column: name,
+                "операції": values["операції"],
+                "кількість": values["кількість"],
+                "виручка": round(values["виручка"], 2),
+                "собівартість": round(values["собівартість"], 2),
+                "валовий_прибуток": round(values["прибуток"], 2),
+                "маржа_%": round(margin, 2),
+                "націнка_%": round(markup, 2),
+            }
         )
 
-        for category, data in categories.items():
-            margin = (
-                data["прибуток"] / data["виручка"] * 100
-                if data["виручка"]
-                else 0
-            )
+    rows_to_export.sort(
+        key=lambda x: x["виручка"],
+        reverse=True
+    )
 
-            writer.writerow(
-                [
-                    category,
-                    data["кількість"],
-                    round(data["виручка"], 2),
-                    round(data["собівартість"], 2),
-                    round(data["прибуток"], 2),
-                    round(margin, 2),
-                ]
-            )
+    fieldnames = [
+        name_column,
+        "операції",
+        "кількість",
+        "виручка",
+        "собівартість",
+        "валовий_прибуток",
+        "маржа_%",
+        "націнка_%",
+    ]
+
+    with open(output_file, "w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows_to_export)
 
 
-def print_report(rows):
-    total_revenue, total_cost, total_profit, margin = calculate_summary(rows)
-    categories = analyze_categories(rows)
+def print_summary(rows):
+    total_revenue = sum(row["виручка"] for row in rows)
+    total_cost = sum(row["собівартість"] for row in rows)
+    total_profit = sum(row["валовий_прибуток"] for row in rows)
+
+    margin = calculate_margin(total_profit, total_revenue)
+    markup = calculate_markup(total_profit, total_cost)
 
     print("=" * 60)
     print("КОМЕРЦІЙНИЙ АНАЛІЗ")
@@ -107,30 +123,49 @@ def print_report(rows):
     print(f"Собівартість: {total_cost:,.2f}")
     print(f"Валовий прибуток: {total_profit:,.2f}")
     print(f"Маржа: {margin:.2f}%")
+    print(f"Націнка: {markup:.2f}%")
 
-    print("\nАНАЛІЗ ЗА КАТЕГОРІЯМИ")
-    print("-" * 60)
 
-    for category, data in categories.items():
-        category_margin = (
-            data["прибуток"] / data["виручка"] * 100
-            if data["виручка"]
-            else 0
-        )
+def main():
+    rows = load_data(FILE_PATH)
 
-        print(f"\n{category}")
-        print(f"  Кількість: {data['кількість']}")
-        print(f"  Виручка: {data['виручка']:,.2f}")
-        print(f"  Прибуток: {data['прибуток']:,.2f}")
-        print(f"  Маржа: {category_margin:.2f}%")
+    categories = aggregate(rows, "категорія")
+    products = aggregate(rows, "товар")
+    suppliers = aggregate(rows, "постачальник")
+    customers = aggregate(rows, "покупець")
 
-    export_category_report(categories, OUTPUT_FILE)
+    export_report(
+        categories,
+        "категорія",
+        CATEGORY_REPORT
+    )
 
-    print("\n" + "=" * 60)
-    print(f"CSV-звіт створено: {OUTPUT_FILE}")
-    print("=" * 60)
+    export_report(
+        products,
+        "товар",
+        PRODUCT_REPORT
+    )
+
+    export_report(
+        suppliers,
+        "постачальник",
+        SUPPLIER_REPORT
+    )
+
+    export_report(
+        customers,
+        "покупець",
+        CUSTOMER_REPORT
+    )
+
+    print_summary(rows)
+
+    print("\nСтворено звіти:")
+    print(f"• {CATEGORY_REPORT}")
+    print(f"• {PRODUCT_REPORT}")
+    print(f"• {SUPPLIER_REPORT}")
+    print(f"• {CUSTOMER_REPORT}")
 
 
 if __name__ == "__main__":
-    data = load_data(FILE_PATH)
-    print_report(data)
+    main()
