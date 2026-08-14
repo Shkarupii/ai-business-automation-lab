@@ -143,7 +143,7 @@ def create_alerts(products, suppliers, customers):
             risk, priority = risk_level(
                 margin,
                 LOW_MARGIN_THRESHOLD,
-                direction="low"
+                direction="low",
             )
 
             alerts.append(
@@ -156,7 +156,7 @@ def create_alerts(products, suppliers, customers):
                     "пріоритет": priority,
                     "рекомендація":
                         "Перевірити закупівельну ціну, ціну продажу "
-                        "та доцільність продажу товару",
+                        "та економічну доцільність товару.",
                 }
             )
 
@@ -171,7 +171,6 @@ def create_alerts(products, suppliers, customers):
             risk, priority = risk_level(
                 share,
                 HIGH_CUSTOMER_SHARE,
-                direction="high"
             )
 
             alerts.append(
@@ -184,7 +183,7 @@ def create_alerts(products, suppliers, customers):
                     "пріоритет": priority,
                     "рекомендація":
                         "Зменшувати концентрацію виручки "
-                        "та розширювати клієнтську базу",
+                        "та розширювати клієнтську базу.",
                 }
             )
 
@@ -199,7 +198,6 @@ def create_alerts(products, suppliers, customers):
             risk, priority = risk_level(
                 share,
                 HIGH_SUPPLIER_SHARE,
-                direction="high"
             )
 
             alerts.append(
@@ -212,7 +210,7 @@ def create_alerts(products, suppliers, customers):
                     "пріоритет": priority,
                     "рекомендація":
                         "Розглянути альтернативних постачальників "
-                        "і диверсифікувати закупівлі",
+                        "і диверсифікувати закупівлі.",
                 }
             )
 
@@ -253,8 +251,19 @@ def top_items(data, limit=5):
     return sorted(
         data.items(),
         key=lambda item: item[1]["виручка"],
-        reverse=True
+        reverse=True,
     )[:limit]
+
+
+def priority_icon(priority):
+    icons = {
+        "критичний": "🔴",
+        "високий": "🟠",
+        "середній": "🟡",
+        "низький": "🟢",
+    }
+
+    return icons.get(priority, "⚪")
 
 
 def create_executive_summary(
@@ -262,7 +271,7 @@ def create_executive_summary(
     products,
     suppliers,
     customers,
-    alerts
+    alerts,
 ):
     total_revenue = sum(row["виручка"] for row in rows)
     total_cost = sum(row["собівартість"] for row in rows)
@@ -279,89 +288,161 @@ def create_executive_summary(
 
     lines.append("# Executive Summary")
     lines.append("")
-    lines.append("## Ключові показники")
-    lines.append("")
-    lines.append(f"- Кількість операцій: **{len(rows)}**")
-    lines.append(f"- Виручка: **{total_revenue:,.2f}**")
-    lines.append(f"- Собівартість: **{total_cost:,.2f}**")
-    lines.append(f"- Валовий прибуток: **{total_profit:,.2f}**")
-    lines.append(f"- Маржа: **{margin:.2f}%**")
-    lines.append(f"- Націнка: **{markup:.2f}%**")
+    lines.append(
+        "> ⚠️ Демонстраційний звіт. Дані є синтетичними "
+        "та не містять реальної комерційної інформації."
+    )
     lines.append("")
 
-    lines.append("## ТОП-5 товарів за виручкою")
+    # KPI
+    lines.append("## 📊 Ключові показники")
+    lines.append("")
+    lines.append("| Показник | Значення |")
+    lines.append("|---|---:|")
+    lines.append(f"| Кількість операцій | {len(rows)} |")
+    lines.append(f"| Виручка | {total_revenue:,.2f} |")
+    lines.append(f"| Собівартість | {total_cost:,.2f} |")
+    lines.append(f"| Валовий прибуток | {total_profit:,.2f} |")
+    lines.append(f"| Маржа | {margin:.2f}% |")
+    lines.append(f"| Націнка | {markup:.2f}% |")
     lines.append("")
 
-    for i, (name, values) in enumerate(top_products, start=1):
-        lines.append(
-            f"{i}. **{name}** — {values['виручка']:,.2f}"
-        )
-
-    lines.append("")
-    lines.append("## ТОП-5 покупців за виручкою")
-    lines.append("")
-
-    for i, (name, values) in enumerate(top_customers, start=1):
-        lines.append(
-            f"{i}. **{name}** — {values['виручка']:,.2f}"
-        )
-
-    lines.append("")
-    lines.append("## ТОП постачальників")
-    lines.append("")
-
-    for i, (name, values) in enumerate(top_suppliers, start=1):
-        lines.append(
-            f"{i}. **{name}** — {values['виручка']:,.2f}"
-        )
-
-    lines.append("")
-    lines.append("## Бізнес-сигнали")
+    # Alerts
+    lines.append("## 🚨 Критичні сигнали")
     lines.append("")
 
     if alerts:
         for alert in alerts:
+            icon = priority_icon(alert["пріоритет"])
+
             lines.append(
-                f"- **{alert['тип']}** — {alert['об\'єкт']}: "
-                f"{alert['показник']}% "
-                f"(ризик: {alert['рівень_ризику']}, "
-                f"пріоритет: {alert['пріоритет']})"
+                f"{icon} **{alert['тип']}** — "
+                f"**{alert['об\'єкт']}**"
+            )
+            lines.append("")
+            lines.append(
+                f"- Показник: **{alert['показник']}%**"
             )
             lines.append(
-                f"  - Рекомендація: {alert['рекомендація']}"
+                f"- Поріг: **{alert['поріг']}%**"
+            )
+            lines.append(
+                f"- Рівень ризику: **{alert['рівень_ризику']}**"
+            )
+            lines.append(
+                f"- Пріоритет: **{alert['пріоритет']}**"
+            )
+            lines.append(
+                f"- Рекомендація: {alert['рекомендація']}"
+            )
+            lines.append("")
+    else:
+        lines.append("✅ Критичних бізнес-сигналів не виявлено.")
+        lines.append("")
+
+    # First actions
+    lines.append("## 🎯 Що робити в першу чергу")
+    lines.append("")
+
+    priority_alerts = [
+        a for a in alerts
+        if a["пріоритет"] in ("критичний", "високий")
+    ]
+
+    if priority_alerts:
+        for index, alert in enumerate(priority_alerts, start=1):
+            lines.append(
+                f"{index}. **{alert['об\'єкт']}** — "
+                f"{alert['рекомендація']}"
             )
     else:
-        lines.append("- Критичних сигналів не виявлено.")
+        lines.append(
+            "1. Продовжувати моніторинг маржинальності."
+        )
+        lines.append(
+            "2. Контролювати концентрацію покупців."
+        )
+        lines.append(
+            "3. Контролювати залежність від ключових постачальників."
+        )
 
     lines.append("")
-    lines.append("## Управлінський висновок")
+
+    # Top products
+    lines.append("## 🏆 ТОП-5 товарів за виручкою")
     lines.append("")
+    lines.append("| # | Товар | Виручка |")
+    lines.append("|---:|---|---:|")
+
+    for i, (name, values) in enumerate(top_products, start=1):
+        lines.append(
+            f"| {i} | {name} | {values['виручка']:,.2f} |"
+        )
+
+    lines.append("")
+
+    # Top customers
+    lines.append("## 👥 ТОП-5 покупців")
+    lines.append("")
+    lines.append("| # | Покупець | Виручка |")
+    lines.append("|---:|---|---:|")
+
+    for i, (name, values) in enumerate(top_customers, start=1):
+        lines.append(
+            f"| {i} | {name} | {values['виручка']:,.2f} |"
+        )
+
+    lines.append("")
+
+    # Top suppliers
+    lines.append("## 🚚 ТОП постачальників")
+    lines.append("")
+    lines.append("| # | Постачальник | Обсяг |")
+    lines.append("|---:|---|---:|")
+
+    for i, (name, values) in enumerate(top_suppliers, start=1):
+        lines.append(
+            f"| {i} | {name} | {values['виручка']:,.2f} |"
+        )
+
+    lines.append("")
+
+    # Final conclusion
+    lines.append("## 🧠 Управлінський висновок")
+    lines.append("")
+
+    critical_count = sum(
+        1 for alert in alerts
+        if alert["пріоритет"] == "критичний"
+    )
+
+    high_count = sum(
+        1 for alert in alerts
+        if alert["пріоритет"] == "високий"
+    )
 
     if alerts:
-        critical_count = sum(
-            1 for alert in alerts
-            if alert["пріоритет"] == "критичний"
-        )
-
-        high_count = sum(
-            1 for alert in alerts
-            if alert["пріоритет"] == "високий"
-        )
-
         lines.append(
-            f"Виявлено **{len(alerts)}** бізнес-сигнал(и), "
-            f"з них критичних — **{critical_count}**, "
+            f"Загальна маржа становить **{margin:.2f}%**, "
+            f"а валовий прибуток — **{total_profit:,.2f}**."
+        )
+        lines.append("")
+        lines.append(
+            f"Виявлено **{len(alerts)}** бізнес-сигнал(и): "
+            f"критичних — **{critical_count}**, "
             f"високого пріоритету — **{high_count}**."
         )
         lines.append("")
         lines.append(
-            "Рекомендується насамперед опрацювати сигнали "
-            "з критичним та високим пріоритетом."
+            "Основний фокус управління — усунення "
+            "низькомаржинальних позицій та зменшення "
+            "концентраційних ризиків."
         )
     else:
         lines.append(
-            "За встановленими порогами суттєвих комерційних "
-            "ризиків не виявлено."
+            f"Загальна маржа становить **{margin:.2f}%**. "
+            "За встановленими порогами суттєвих "
+            "комерційних ризиків не виявлено."
         )
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -381,7 +462,6 @@ def print_summary(rows):
     print("=" * 60)
     print("КОМЕРЦІЙНИЙ АНАЛІЗ")
     print("=" * 60)
-
     print(f"Кількість операцій: {len(rows)}")
     print(f"Виручка: {total_revenue:,.2f}")
     print(f"Собівартість: {total_cost:,.2f}")
@@ -406,7 +486,7 @@ def main():
     alerts = create_alerts(
         products,
         suppliers,
-        customers
+        customers,
     )
 
     export_alerts(alerts)
@@ -416,7 +496,7 @@ def main():
         products,
         suppliers,
         customers,
-        alerts
+        alerts,
     )
 
     print_summary(rows)
