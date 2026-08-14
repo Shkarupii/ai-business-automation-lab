@@ -354,11 +354,7 @@ def validate_row(row, source_row, category_mapping, duplicate_skus):
     if stock == 0:
         status = "out_of_stock"
 
-    availability = (
-        "in_stock"
-        if stock > 0 and status == "active"
-        else "out_of_stock"
-    )
+    availability = "in_stock" if stock > 0 else "out_of_stock"
 
     standardized_row = {
         "sku": sku,
