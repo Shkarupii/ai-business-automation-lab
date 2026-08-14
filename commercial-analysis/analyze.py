@@ -10,6 +10,7 @@ PRODUCT_REPORT = os.path.join(OUTPUT_DIR, "products-report.csv")
 SUPPLIER_REPORT = os.path.join(OUTPUT_DIR, "suppliers-report.csv")
 CUSTOMER_REPORT = os.path.join(OUTPUT_DIR, "customers-report.csv")
 ALERTS_REPORT = os.path.join(OUTPUT_DIR, "alerts-report.csv")
+EXECUTIVE_SUMMARY = os.path.join(OUTPUT_DIR, "executive-summary.md")
 
 LOW_MARGIN_THRESHOLD = 25
 HIGH_CUSTOMER_SHARE = 30
@@ -89,10 +90,7 @@ def export_report(data, name_column, output_file):
             }
         )
 
-    rows_to_export.sort(
-        key=lambda x: x["виручка"],
-        reverse=True
-    )
+    rows_to_export.sort(key=lambda x: x["виручка"], reverse=True)
 
     fieldnames = [
         name_column,
@@ -138,12 +136,8 @@ def create_alerts(products, suppliers, customers):
     total_revenue = sum(v["виручка"] for v in customers.values())
     total_cost = sum(v["собівартість"] for v in suppliers.values())
 
-    # Низькомаржинальні товари
     for product, values in products.items():
-        margin = calculate_margin(
-            values["прибуток"],
-            values["виручка"]
-        )
+        margin = calculate_margin(values["прибуток"], values["виручка"])
 
         if margin < LOW_MARGIN_THRESHOLD:
             risk, priority = risk_level(
@@ -161,12 +155,11 @@ def create_alerts(products, suppliers, customers):
                     "рівень_ризику": risk,
                     "пріоритет": priority,
                     "рекомендація":
-                        "Перевірити закупівельну ціну, "
-                        "ціну продажу та доцільність продажу товару",
+                        "Перевірити закупівельну ціну, ціну продажу "
+                        "та доцільність продажу товару",
                 }
             )
 
-    # Концентрація покупців
     for customer, values in customers.items():
         share = (
             values["виручка"] / total_revenue * 100
@@ -195,7 +188,6 @@ def create_alerts(products, suppliers, customers):
                 }
             )
 
-    # Концентрація постачальників
     for supplier, values in suppliers.items():
         share = (
             values["собівартість"] / total_cost * 100
@@ -232,10 +224,7 @@ def create_alerts(products, suppliers, customers):
     }
 
     alerts.sort(
-        key=lambda x: priority_order.get(
-            x["пріоритет"],
-            99
-        )
+        key=lambda x: priority_order.get(x["пріоритет"], 99)
     )
 
     return alerts
@@ -254,65 +243,140 @@ def export_alerts(alerts):
         "рекомендація",
     ]
 
-    with open(
-        ALERTS_REPORT,
-        "w",
-        encoding="utf-8-sig",
-        newline=""
-    ) as file:
-        writer = csv.DictWriter(
-            file,
-            fieldnames=fieldnames
-        )
-
+    with open(ALERTS_REPORT, "w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(alerts)
 
 
-def print_top(title, data, limit=5):
-    ranking = sorted(
+def top_items(data, limit=5):
+    return sorted(
         data.items(),
         key=lambda item: item[1]["виручка"],
-        reverse=True,
+        reverse=True
     )[:limit]
 
-    print(f"\n{title}")
 
-    for index, (name, values) in enumerate(
-        ranking,
-        start=1
-    ):
-        print(
-            f"{index}. {name} — "
-            f"{values['виручка']:,.2f}"
+def create_executive_summary(
+    rows,
+    products,
+    suppliers,
+    customers,
+    alerts
+):
+    total_revenue = sum(row["виручка"] for row in rows)
+    total_cost = sum(row["собівартість"] for row in rows)
+    total_profit = sum(row["валовий_прибуток"] for row in rows)
+
+    margin = calculate_margin(total_profit, total_revenue)
+    markup = calculate_markup(total_profit, total_cost)
+
+    top_products = top_items(products)
+    top_customers = top_items(customers)
+    top_suppliers = top_items(suppliers)
+
+    lines = []
+
+    lines.append("# Executive Summary")
+    lines.append("")
+    lines.append("## Ключові показники")
+    lines.append("")
+    lines.append(f"- Кількість операцій: **{len(rows)}**")
+    lines.append(f"- Виручка: **{total_revenue:,.2f}**")
+    lines.append(f"- Собівартість: **{total_cost:,.2f}**")
+    lines.append(f"- Валовий прибуток: **{total_profit:,.2f}**")
+    lines.append(f"- Маржа: **{margin:.2f}%**")
+    lines.append(f"- Націнка: **{markup:.2f}%**")
+    lines.append("")
+
+    lines.append("## ТОП-5 товарів за виручкою")
+    lines.append("")
+
+    for i, (name, values) in enumerate(top_products, start=1):
+        lines.append(
+            f"{i}. **{name}** — {values['виручка']:,.2f}"
         )
+
+    lines.append("")
+    lines.append("## ТОП-5 покупців за виручкою")
+    lines.append("")
+
+    for i, (name, values) in enumerate(top_customers, start=1):
+        lines.append(
+            f"{i}. **{name}** — {values['виручка']:,.2f}"
+        )
+
+    lines.append("")
+    lines.append("## ТОП постачальників")
+    lines.append("")
+
+    for i, (name, values) in enumerate(top_suppliers, start=1):
+        lines.append(
+            f"{i}. **{name}** — {values['виручка']:,.2f}"
+        )
+
+    lines.append("")
+    lines.append("## Бізнес-сигнали")
+    lines.append("")
+
+    if alerts:
+        for alert in alerts:
+            lines.append(
+                f"- **{alert['тип']}** — {alert['об\'єкт']}: "
+                f"{alert['показник']}% "
+                f"(ризик: {alert['рівень_ризику']}, "
+                f"пріоритет: {alert['пріоритет']})"
+            )
+            lines.append(
+                f"  - Рекомендація: {alert['рекомендація']}"
+            )
+    else:
+        lines.append("- Критичних сигналів не виявлено.")
+
+    lines.append("")
+    lines.append("## Управлінський висновок")
+    lines.append("")
+
+    if alerts:
+        critical_count = sum(
+            1 for alert in alerts
+            if alert["пріоритет"] == "критичний"
+        )
+
+        high_count = sum(
+            1 for alert in alerts
+            if alert["пріоритет"] == "високий"
+        )
+
+        lines.append(
+            f"Виявлено **{len(alerts)}** бізнес-сигнал(и), "
+            f"з них критичних — **{critical_count}**, "
+            f"високого пріоритету — **{high_count}**."
+        )
+        lines.append("")
+        lines.append(
+            "Рекомендується насамперед опрацювати сигнали "
+            "з критичним та високим пріоритетом."
+        )
+    else:
+        lines.append(
+            "За встановленими порогами суттєвих комерційних "
+            "ризиків не виявлено."
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    with open(EXECUTIVE_SUMMARY, "w", encoding="utf-8") as file:
+        file.write("\n".join(lines))
 
 
 def print_summary(rows):
-    total_revenue = sum(
-        row["виручка"]
-        for row in rows
-    )
+    total_revenue = sum(row["виручка"] for row in rows)
+    total_cost = sum(row["собівартість"] for row in rows)
+    total_profit = sum(row["валовий_прибуток"] for row in rows)
 
-    total_cost = sum(
-        row["собівартість"]
-        for row in rows
-    )
-
-    total_profit = sum(
-        row["валовий_прибуток"]
-        for row in rows
-    )
-
-    margin = calculate_margin(
-        total_profit,
-        total_revenue
-    )
-
-    markup = calculate_markup(
-        total_profit,
-        total_cost
-    )
+    margin = calculate_margin(total_profit, total_revenue)
+    markup = calculate_markup(total_profit, total_cost)
 
     print("=" * 60)
     print("КОМЕРЦІЙНИЙ АНАЛІЗ")
@@ -329,49 +393,15 @@ def print_summary(rows):
 def main():
     rows = load_data(FILE_PATH)
 
-    categories = aggregate(
-        rows,
-        "категорія"
-    )
+    categories = aggregate(rows, "категорія")
+    products = aggregate(rows, "товар")
+    suppliers = aggregate(rows, "постачальник")
+    customers = aggregate(rows, "покупець")
 
-    products = aggregate(
-        rows,
-        "товар"
-    )
-
-    suppliers = aggregate(
-        rows,
-        "постачальник"
-    )
-
-    customers = aggregate(
-        rows,
-        "покупець"
-    )
-
-    export_report(
-        categories,
-        "категорія",
-        CATEGORY_REPORT
-    )
-
-    export_report(
-        products,
-        "товар",
-        PRODUCT_REPORT
-    )
-
-    export_report(
-        suppliers,
-        "постачальник",
-        SUPPLIER_REPORT
-    )
-
-    export_report(
-        customers,
-        "покупець",
-        CUSTOMER_REPORT
-    )
+    export_report(categories, "категорія", CATEGORY_REPORT)
+    export_report(products, "товар", PRODUCT_REPORT)
+    export_report(suppliers, "постачальник", SUPPLIER_REPORT)
+    export_report(customers, "покупець", CUSTOMER_REPORT)
 
     alerts = create_alerts(
         products,
@@ -381,37 +411,15 @@ def main():
 
     export_alerts(alerts)
 
+    create_executive_summary(
+        rows,
+        products,
+        suppliers,
+        customers,
+        alerts
+    )
+
     print_summary(rows)
-
-    print_top(
-        "ТОП-5 ТОВАРІВ ЗА ВИРУЧКОЮ",
-        products
-    )
-
-    print_top(
-        "ТОП-5 ПОКУПЦІВ ЗА ВИРУЧКОЮ",
-        customers
-    )
-
-    print_top(
-        "ТОП ПОСТАЧАЛЬНИКІВ",
-        suppliers
-    )
-
-    print("\nБІЗНЕС-СИГНАЛИ")
-    print("-" * 60)
-
-    if alerts:
-        for alert in alerts:
-            print(
-                f"⚠ {alert['тип']}: "
-                f"{alert['об\'єкт']} | "
-                f"{alert['показник']}% | "
-                f"ризик: {alert['рівень_ризику']} | "
-                f"пріоритет: {alert['пріоритет']}"
-            )
-    else:
-        print("Критичних сигналів не виявлено.")
 
     print("\nСтворено звіти:")
     print(f"• {CATEGORY_REPORT}")
@@ -419,6 +427,7 @@ def main():
     print(f"• {SUPPLIER_REPORT}")
     print(f"• {CUSTOMER_REPORT}")
     print(f"• {ALERTS_REPORT}")
+    print(f"• {EXECUTIVE_SUMMARY}")
 
 
 if __name__ == "__main__":
