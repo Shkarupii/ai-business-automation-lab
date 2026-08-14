@@ -1,7 +1,10 @@
 import csv
+import os
 from collections import defaultdict
 
 FILE_PATH = "examples/demo-komertsiini-dani.csv"
+OUTPUT_DIR = "output"
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "commercial-report.csv")
 
 
 def load_data(file_path):
@@ -55,6 +58,42 @@ def analyze_categories(rows):
     return categories
 
 
+def export_category_report(categories, output_file):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    with open(output_file, "w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.writer(file)
+
+        writer.writerow(
+            [
+                "категорія",
+                "кількість",
+                "виручка",
+                "собівартість",
+                "валовий_прибуток",
+                "маржа_%",
+            ]
+        )
+
+        for category, data in categories.items():
+            margin = (
+                data["прибуток"] / data["виручка"] * 100
+                if data["виручка"]
+                else 0
+            )
+
+            writer.writerow(
+                [
+                    category,
+                    data["кількість"],
+                    round(data["виручка"], 2),
+                    round(data["собівартість"], 2),
+                    round(data["прибуток"], 2),
+                    round(margin, 2),
+                ]
+            )
+
+
 def print_report(rows):
     total_revenue, total_cost, total_profit, margin = calculate_summary(rows)
     categories = analyze_categories(rows)
@@ -84,6 +123,12 @@ def print_report(rows):
         print(f"  Виручка: {data['виручка']:,.2f}")
         print(f"  Прибуток: {data['прибуток']:,.2f}")
         print(f"  Маржа: {category_margin:.2f}%")
+
+    export_category_report(categories, OUTPUT_FILE)
+
+    print("\n" + "=" * 60)
+    print(f"CSV-звіт створено: {OUTPUT_FILE}")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
