@@ -9,6 +9,11 @@ CATEGORY_REPORT = os.path.join(OUTPUT_DIR, "commercial-report.csv")
 PRODUCT_REPORT = os.path.join(OUTPUT_DIR, "products-report.csv")
 SUPPLIER_REPORT = os.path.join(OUTPUT_DIR, "suppliers-report.csv")
 CUSTOMER_REPORT = os.path.join(OUTPUT_DIR, "customers-report.csv")
+ALERTS_REPORT = os.path.join(OUTPUT_DIR, "alerts-report.csv")
+
+LOW_MARGIN_THRESHOLD = 25
+HIGH_CUSTOMER_SHARE = 30
+HIGH_SUPPLIER_SHARE = 40
 
 
 def load_data(file_path):
@@ -84,10 +89,7 @@ def export_report(data, name_column, output_file):
             }
         )
 
-    rows_to_export.sort(
-        key=lambda x: x["виручка"],
-        reverse=True
-    )
+    rows_to_export.sort(key=lambda x: x["виручка"], reverse=True)
 
     fieldnames = [
         name_column,
@@ -104,6 +106,90 @@ def export_report(data, name_column, output_file):
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows_to_export)
+
+
+def create_alerts(products, suppliers, customers):
+    alerts = []
+
+    total_revenue = sum(v["виручка"] for v in customers.values())
+    total_cost = sum(v["собівартість"] for v in suppliers.values())
+
+    # Низькомаржинальні товари
+    for product, values in products.items():
+        margin = calculate_margin(values["прибуток"], values["виручка"])
+
+        if margin < LOW_MARGIN_THRESHOLD:
+            alerts.append(
+                {
+                    "тип": "Низька маржа",
+                    "об'єкт": product,
+                    "показник": round(margin, 2),
+                    "поріг": LOW_MARGIN_THRESHOLD,
+                    "рекомендація": "Перевірити закупівельну ціну або ціну продажу",
+                }
+            )
+
+    # Концентрація покупців
+    for customer, values in customers.items():
+        share = (values["виручка"] / total_revenue * 100) if total_revenue else 0
+
+        if share > HIGH_CUSTOMER_SHARE:
+            alerts.append(
+                {
+                    "тип": "Висока залежність від покупця",
+                    "об'єкт": customer,
+                    "показник": round(share, 2),
+                    "поріг": HIGH_CUSTOMER_SHARE,
+                    "рекомендація": "Зменшувати концентрацію виручки на одному покупцеві",
+                }
+            )
+
+    # Концентрація постачальників
+    for supplier, values in suppliers.items():
+        share = (values["собівартість"] / total_cost * 100) if total_cost else 0
+
+        if share > HIGH_SUPPLIER_SHARE:
+            alerts.append(
+                {
+                    "тип": "Висока залежність від постачальника",
+                    "об'єкт": supplier,
+                    "показник": round(share, 2),
+                    "поріг": HIGH_SUPPLIER_SHARE,
+                    "рекомендація": "Розглянути альтернативних постачальників",
+                }
+            )
+
+    return alerts
+
+
+def export_alerts(alerts):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    fieldnames = [
+        "тип",
+        "об'єкт",
+        "показник",
+        "поріг",
+        "рекомендація",
+    ]
+
+    with open(ALERTS_REPORT, "w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(alerts)
+
+
+def print_top(title, data, limit=5):
+    ranking = sorted(
+        data.items(),
+        key=lambda item: item[1]["виручка"],
+        reverse=True,
+    )[:limit]
+
+    print(f"\n{title}")
+
+    for index, (name, values) in enumerate(ranking, start=1):
+        print(f"{index}. {name} — {values['виручка']:,.2f}")
 
 
 def print_summary(rows):
@@ -134,37 +220,38 @@ def main():
     suppliers = aggregate(rows, "постачальник")
     customers = aggregate(rows, "покупець")
 
-    export_report(
-        categories,
-        "категорія",
-        CATEGORY_REPORT
-    )
+    export_report(categories, "категорія", CATEGORY_REPORT)
+    export_report(products, "товар", PRODUCT_REPORT)
+    export_report(suppliers, "постачальник", SUPPLIER_REPORT)
+    export_report(customers, "покупець", CUSTOMER_REPORT)
 
-    export_report(
-        products,
-        "товар",
-        PRODUCT_REPORT
-    )
-
-    export_report(
-        suppliers,
-        "постачальник",
-        SUPPLIER_REPORT
-    )
-
-    export_report(
-        customers,
-        "покупець",
-        CUSTOMER_REPORT
-    )
+    alerts = create_alerts(products, suppliers, customers)
+    export_alerts(alerts)
 
     print_summary(rows)
+
+    print_top("ТОП-5 ТОВАРІВ ЗА ВИРУЧКОЮ", products)
+    print_top("ТОП-5 ПОКУПЦІВ ЗА ВИРУЧКОЮ", customers)
+    print_top("ТОП ПОСТАЧАЛЬНИКІВ", suppliers)
+
+    print("\nБІЗНЕС-СИГНАЛИ")
+    print("-" * 60)
+
+    if alerts:
+        for alert in alerts:
+            print(
+                f"⚠ {alert['тип']}: {alert['об\'єкт']} "
+                f"({alert['показник']}%)"
+            )
+    else:
+        print("Критичних сигналів не виявлено.")
 
     print("\nСтворено звіти:")
     print(f"• {CATEGORY_REPORT}")
     print(f"• {PRODUCT_REPORT}")
     print(f"• {SUPPLIER_REPORT}")
     print(f"• {CUSTOMER_REPORT}")
+    print(f"• {ALERTS_REPORT}")
 
 
 if __name__ == "__main__":
